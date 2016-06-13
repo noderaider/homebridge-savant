@@ -1,6 +1,6 @@
 {
   "name": "homebridge-savant",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Savant platform plugin for homebridge: https://github.com/nfarina/homebridge",
   "main": "lib/index.js",
   "files": [
