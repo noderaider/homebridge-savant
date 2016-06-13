@@ -9,6 +9,7 @@
     "url": "git://github.com/wallwitz/homebridge-savant.git"
   },
   "keywords": [
+    "homebridge-plugin",
     "savant",
     "homebridge"
   ],
