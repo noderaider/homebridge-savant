@@ -9,7 +9,7 @@ export default function(homebridge) {
   homebridge.registerPlatform('homebridge-platform-savant', 'Savant', SavantPlatform)
 }
 
-class SavantPlatform {
+export class SavantPlatform {
   constructor(log, config) {
     this.log = log
     this.config = config
@@ -35,7 +35,7 @@ class SavantPlatform {
 }
 
 
-class SavantAccessory {
+export class SavantAccessory {
   constructor(log, config) {
     this.log = log
     this.config = config
