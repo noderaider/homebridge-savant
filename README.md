@@ -1,4 +1,4 @@
-[![NPM](https://raw.githubusercontent.com/noderaider/homebridge-savant/master/public/images/homebridge-savant.gif)](https://npmjs.com/packages/homebridge-savant)
+## homebridge-savant
 
 **Control your savant.**
 
