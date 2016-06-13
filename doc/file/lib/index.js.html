@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <base data-ice="baseUrl" href="../../">
+  <title data-ice="title">lib/index.js | API Document</title>
+  <link type="text/css" rel="stylesheet" href="css/style.css">
+  <link type="text/css" rel="stylesheet" href="css/prettify-tomorrow.css">
+  <script src="script/prettify/prettify.js"></script>
+  
+  
+  <script src="script/manual.js"></script>
+</head>
+<body class="layout-container" data-ice="rootContainer">
+
+<header>
+  <a href="./">Home</a>
+  
+  <a href="identifiers.html">Reference</a>
+  <a href="source.html">Source</a>
+  
+  
+  <div class="search-box">
+  <span>
+    <img src="./image/search.png">
+    <span class="search-input-edge"></span><input class="search-input"><span class="search-input-edge"></span>
+  </span>
+    <ul class="search-result"></ul>
+  </div>
+</header>
+
+<nav class="navigation" data-ice="nav"><div>
+  <ul>
+    
+  <li data-ice="doc"><span data-ice="kind" class="kind-function">F</span><span data-ice="name"><span><a href="function/index.html#static-function-index">index</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-function">F</span><span data-ice="name"><span><a href="function/index.html#static-function-readState">readState</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-function">F</span><span data-ice="name"><span><a href="function/index.html#static-function-serviceRequest">serviceRequest</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-function">F</span><span data-ice="name"><span><a href="function/index.html#static-function-writeState">writeState</a></span></span></li>
+</ul>
+</div>
+</nav>
+
+<div class="content" data-ice="content"><h1 data-ice="title">lib/index.js</h1>
+<pre class="source-code line-number raw-source-code"><code class="prettyprint linenums" data-ice="content">import savant from &apos;./savant&apos;
+let Service = null
+let Characteristic = null
+
+
+export default function(homebridge) {
+  Service = homebridge.hap.Service
+  Characteristic = homebridge.hap.Characteristic
+  homebridge.registerPlatform(&apos;homebridge-platform-savant&apos;, &apos;Savant&apos;, SavantPlatform)
+}
+
+class SavantPlatform {
+  constructor(log, config) {
+    this.log = log
+    this.config = config
+  }
+  accessories = callback =&gt; {
+    this.log(&apos;Fetching Savant devices...&apos;)
+    //For each device, create an accessory!
+    var foundAccessories = this.config.accessories
+    //create array of accessories
+    var myAccessories = []
+    
+    for (var i = 0; i &lt; foundAccessories.length; i++) {
+      this.log(&apos;Parsing accessory &apos; + i + &apos; of &apos; + foundAccessories.length)
+      this.log(&apos;Push new device &apos; + foundAccessories[i].name)
+      //Call accessoryConstruction
+      var accessory = new SavantAccessory(this.log, foundAccessories[i])
+      this.log(&apos;Created &apos; + accessory.name + &apos; Accessory&apos;)
+      myAccessories.push(accessory)
+    }
+    this.log(&apos;Returning &apos; + myAccessories.length + &apos; accessories&apos;)
+    callback(myAccessories)
+  }
+}
+
+
+class SavantAccessory {
+  constructor(log, config) {
+    this.log = log
+    this.config = config
+    this.name = config.name
+    if (config.type == &apos;switch&apos;) {
+       //Switch thing
+       this.onCommand = config[&apos;on&apos;]
+       this.offCommand = config[&apos;off&apos;]
+       this.queryCommand = config[&apos;query&apos;]
+    } else if (config.type == &apos;thermostat&apos;) { 
+       //Thermostat thing
+       //Characteristic.TemperatureDisplayUnits.CELSIUS = 0;
+       //Characteristic.TemperatureDisplayUnits.FAHRENHEIT = 1;
+       this.temperatureDisplayUnits = Characteristic.TemperatureDisplayUnits.CELSIUS
+       this.temperature = 19
+       //this.relativeHumidity = 0.70;
+       // The value property of CurrentHeatingCoolingState must be one of the following:
+       //Characteristic.CurrentHeatingCoolingState.OFF = 0;
+       //Characteristic.CurrentHeatingCoolingState.HEAT = 1;
+       //Characteristic.CurrentHeatingCoolingState.COOL = 2;
+       this.heatingCoolingState = Characteristic.CurrentHeatingCoolingState.COOL
+       this.targetTemperature = 21
+       //this.targetRelativeHumidity = 0.5;
+       this.heatingThresholdTemperature = 22
+       this.coolingThresholdTemperature = 19
+       // The value property of TargetHeatingCoolingState must be one of the following:
+       //Characteristic.TargetHeatingCoolingState.OFF = 0;
+       //Characteristic.TargetHeatingCoolingState.HEAT = 1;
+       //Characteristic.TargetHeatingCoolingState.COOL = 2;
+       //Characteristic.TargetHeatingCoolingState.AUTO = 3;
+       this.targetHeatingCoolingState = Characteristic.TargetHeatingCoolingState.COOL
+    
+       //Temp:
+       this.offCommand = config[&apos;off&apos;]
+       this.coolCommand = config[&apos;cool&apos;]
+       this.heatCommand = config[&apos;heat&apos;]
+       this.setCommand = config[&apos;set&apos;]
+       this.queryTempCommand = config[&apos;queryTemp&apos;]
+       this.queryStateCommand = config[&apos;queryState&apos;]
+    
+    } else if (config.type == &apos;lightbulb&apos;) {
+       //Dimmer thing
+       this.onCommand = config[&apos;on&apos;]
+       this.offCommand = config[&apos;off&apos;]
+       this.setCommand = config[&apos;set&apos;]
+       this.queryCommand = config[&apos;query&apos;]
+    }
+  }
+
+    //**************Switch**************
+    setState = (powerOn, callback) =&gt; {
+      var accessory = this
+      var state = powerOn ? &apos;on&apos; : &apos;off&apos;
+      var prop = state + &apos;Command&apos;
+      var command = accessory[prop].replace(/&apos;&apos;/g, &apos;&quot;&apos;)
+      this.log(&apos;Command: &apos;+command)
+      savant.serviceRequest(command, done)
+
+      function done(err, rtn) {
+        if (err) {
+          accessory.log(&apos;Error: &apos; + err)
+          callback(err || new Error(&apos;Error setting &apos; + accessory.name + &apos; to &apos; + state))
+        } else {
+          accessory.log(&apos;Set &apos; + accessory.name + &apos; to &apos; + state)
+          callback(null)
+        }
+      }
+    };
+
+    getPowerState = callback =&gt; {
+        this.log(&apos;Calling the function to get current state...&apos;)
+      var accessory = this
+        var getsavant = this.queryCommand.replace(/&apos;&apos;/g, &apos;&quot;&apos;)
+    
+      savant.readState(getsavant, done)
+
+      function done(err, rtn) {
+        if (err) {
+          accessory.log(&apos;Error: &apos; + err)
+          callback(err || new Error(&apos;Error setting &apos; + accessory.name + &apos; to &apos; + rtn))
+        } else {
+            if (rtn == 0) {
+                accessory.log(&apos;The &apos; + accessory.name + &apos; is Off &apos;)
+              callback(null, false)
+            } else {
+               accessory.log(&apos;The &apos; + accessory.name + &apos; is On: &apos;)
+               callback(null, true)
+          }
+        }
+      }
+    };
+    
+    //**************Thermostat**************
+    // Required
+  getCurrentHeatingCoolingState = callback =&gt; {
+        this.log(&apos;Calling the function to get current state...&apos;)
+        var accessory = this
+        var getsavant = this.queryStateCommand.replace(/&apos;&apos;/g, &apos;&quot;&apos;)
+    
+      savant.readState(getsavant, done)
+
+      function done(err, rtn) {
+            if (err) {
+                accessory.log(&apos;Error: &apos; + err)
+          callback(err || new Error(&apos;Error setting &apos; + accessory.name + &apos; to &apos; + rtn))
+        } else {
+                if (rtn == 0) {
+                    accessory.log(&apos;getCurrentHeatingCoolingState :&apos;, &apos;Off &apos;)
+                //this.CurrentHeatingCoolingState = parseInt(&apos;0&apos;);
+              //callback(null, Characteristic.CurrentHeatingCoolingState.OFF);
+              callback(null,0)
+                } else if (rtn == 1) {
+                    accessory.log(&apos;getCurrentHeatingCoolingState :&apos;, &apos;Cool &apos;)
+                //this.CurrentHeatingCoolingState = parseInt(&apos;2&apos;);
+              //callback(null, Characteristic.CurrentHeatingCoolingState.COOL);
+              callback(null,2)
+                } else if (rtn == 2) {
+                accessory.log(&apos;getCurrentHeatingCoolingState :&apos;, &apos;Heat &apos;)
+                //this.CurrentHeatingCoolingState = parseInt(&apos;1&apos;);
+              //callback(null, Characteristic.CurrentHeatingCoolingState.HEAT);
+              callback(null,1)
+          } else {
+              accessory.log(&apos;getCurrentHeatingCoolingState :&apos;, &apos;Cool &apos;)
+                //this.CurrentHeatingCoolingState = parseInt(&apos;2&apos;);
+              //callback(null, Characteristic.CurrentHeatingCoolingState.COOL);
+              callback(null,2)
+          }
+        }
+        }
+  };
+  
+  setTargetHeatingCoolingState = (value, callback) =&gt; {
+      this.log(&apos;Valor: &apos; + value)
+        var accessory = this
+        
+        if (value == 0) {
+         var state = &apos;off&apos;
+         //return Characteristic.CurrentHeatingCoolingState.OFF;
+      } else if (value == 1) {
+         var state = &apos;heat&apos;
+         //return Characteristic.CurrentHeatingCoolingState.HEAT;
+      } else {
+         var state = &apos;cool&apos;
+         //return Characteristic.CurrentHeatingCoolingState.COOL;
+      }   
+      this.log(&apos;Valor: &apos; + value + &apos; / Estado: &apos; + state)
+      var prop = state + &apos;Command&apos;
+      var command = accessory[prop].replace(/&apos;&apos;/g, &apos;&quot;&apos;)
+
+      savant.serviceRequest(command, done)
+      
+      function done(err, rtn) {
+      if (err) {
+       accessory.log(&apos;Error: &apos; + err)
+       callback(err || new Error(&apos;Error setting &apos; + accessory.name + &apos; to &apos; + rtn))
+      } else {
+          accessory.log(&apos;setTarget :&apos;, rtn)
+          accessory.log(&apos;setTargetHeatingCoolingState from/to:&apos;, this.targetHeatingCoolingState, value)
+          accessory.targetHeatingCoolingState = value
+          callback(null, this.targetHeatingCoolingState)
+      }
+     }
+  };
+  
+  getCurrentTemperature = callback =&gt; {
+     this.log(&apos;Calling the function to get current temperature...&apos;)
+     var accessory = this
+       var getsavant = this.queryTempCommand.replace(/&apos;&apos;/g, &apos;&quot;&apos;)
+    
+     savant.readState(getsavant, done)
+
+     function done(err, rtn) {
+      if (err) {
+       accessory.log(&apos;Error: &apos; + err)
+       callback(err || new Error(&apos;Error setting &apos; + accessory.name + &apos; to &apos; + rtn))
+      } else {
+          accessory.log(&apos;getCurrentTemperature :&apos;, rtn)
+          this.temperature = parseInt(rtn)
+        callback(null, this.temperature)
+      }
+     }
+  };
+  
+  setTargetTemperature = (value, callback) =&gt; {
+      this.log(&apos;Valor: &apos; + value)
+        var accessory = this
+      var state = String(value)
+      var prop = &apos;setCommand&apos;
+      var commandTemp = accessory[prop].replace(/&apos;&apos;/g, &apos;&quot;&apos;)
+      var command = commandTemp.replace(/VARTEMP/g, state)
+
+      savant.serviceRequest(command)
+  
+    this.log(&apos;setTargetTemperature from/to&apos;, this.targetTemperature, value)
+    this.targetTemperature = parseInt(value)
+    this.temperature = parseInt(value)
+    callback(null, this.targetTemperature)
+  };
+  
+  getTemperatureDisplayUnits = callback =&gt; {
+    this.log(&apos;getTemperatureDisplayUnits :&apos;, this.temperatureDisplayUnits)
+    var error = null
+    callback(error, this.temperatureDisplayUnits)
+  };
+  
+  //**************LightBulb**************
+  setLevelState = (brightness, callback) =&gt; {
+    this.log(&apos;Level: &apos; + brightness)
+      var accessory = this
+    var level = String(brightness)
+    var prop = &apos;setCommand&apos;
+    var commandTemp = accessory[prop].replace(/&apos;&apos;/g, &apos;&quot;&apos;)
+    var command = commandTemp.replace(/VARLEVEL/g, level)
+      
+      savant.serviceRequest(command, done)
+      
+    function done(err, rtn) {
+      if (err) {
+        accessory.log(&apos;Error: &apos; + err)
+        callback(err || new Error(&apos;Error setting &apos; + accessory.name + &apos; to &apos; + level))
+      } else {
+        accessory.log(&apos;Set &apos; + accessory.name + &apos; to &apos; + level)
+        callback(null, level)
+      }
+    }
+  };
+  getLevelState = callback =&gt; {
+   this.log(&apos;Calling the function to get current Light Level...&apos;)
+   var accessory = this
+     var getsavant = this.queryCommand.replace(/&apos;&apos;/g, &apos;&quot;&apos;)
+  
+   savant.readState(getsavant, done)
+
+   function done(err, rtn) {
+    if (err) {
+     accessory.log(&apos;Error: &apos; + err)
+     callback(err || new Error(&apos;Error setting &apos; + accessory.name + &apos; to &apos; + rtn))
+    } else {
+        accessory.log(&apos;getLevelState :&apos;, rtn)
+        this.brightness = parseInt(rtn)
+      callback(null, this.brightness)
+    }
+   }
+  };
+  getServices = () =&gt; {
+      var type = this.config.type
+      
+      var informationService = new Service.AccessoryInformation()
+    informationService
+      .setCharacteristic(Characteristic.Manufacturer, &apos;Savant&apos;)
+      .setCharacteristic(Characteristic.Model, &apos;Pro Host&apos;)
+      .setCharacteristic(Characteristic.SerialNumber, &apos;Savant Serial Number&apos;)
+      
+      if (type == &apos;switch&apos;) {
+          var switchService = new Service.Switch(this.name)
+              switchService
+            .getCharacteristic(Characteristic.On)
+            .on(&apos;get&apos;, this.getPowerState.bind(this))
+            .on(&apos;set&apos;, this.setState.bind(this))
+        
+          return [switchService]
+       
+    } else if (type == &apos;thermostat&apos;) {
+          var thermostatService = new Service.Thermostat(this.name)
+          // Required Characteristics
+    thermostatService
+      .getCharacteristic(Characteristic.CurrentHeatingCoolingState)
+      .on(&apos;get&apos;, this.getCurrentHeatingCoolingState.bind(this))
+
+    thermostatService
+      .getCharacteristic(Characteristic.TargetHeatingCoolingState)
+      .on(&apos;set&apos;, this.setTargetHeatingCoolingState.bind(this))
+
+    thermostatService
+      .getCharacteristic(Characteristic.CurrentTemperature)
+      .on(&apos;get&apos;, this.getCurrentTemperature.bind(this))
+
+    thermostatService
+      .getCharacteristic(Characteristic.TargetTemperature)
+      .on(&apos;set&apos;, this.setTargetTemperature.bind(this))
+
+    thermostatService
+      .getCharacteristic(Characteristic.TemperatureDisplayUnits)
+      .on(&apos;get&apos;, this.getTemperatureDisplayUnits.bind(this))
+
+    return [thermostatService]
+    
+      } else if (type == &apos;lightbulb&apos;) {
+          var lightbulbService = new Service.Lightbulb(this.name)
+          lightbulbService
+           .getCharacteristic(Characteristic.On)
+           .on(&apos;get&apos;, this.getPowerState.bind(this))
+           .on(&apos;set&apos;, this.setState.bind(this))
+          lightbulbService
+           .addCharacteristic(Characteristic.Brightness)
+           .on(&apos;get&apos;, this.getLevelState.bind(this))
+           .on(&apos;set&apos;, this.setLevelState.bind(this))
+          return [lightbulbService]
+       
+    }
+
+  };
+}</code></pre>
+
+</div>
+
+<footer class="footer">
+  Generated by <a href="https://esdoc.org">ESDoc<span data-ice="esdocVersion">(0.4.7)</span></a>
+</footer>
+
+<script src="script/search_index.js"></script>
+<script src="script/search.js"></script>
+<script src="script/pretty-print.js"></script>
+<script src="script/inherited-summary.js"></script>
+<script src="script/test-summary.js"></script>
+<script src="script/inner-link.js"></script>
+<script src="script/patch-for-local.js"></script>
+</body>
+</html>
